@@ -5,22 +5,24 @@ on:
     branches: [ feature/user-id-profile-row, main, master ]
   workflow_dispatch:
 
-# A new push supersedes an older run instead of burning minutes in parallel.
+# A newer push supersedes an in-flight run instead of burning minutes twice.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
   NDK_VERSION: 27.2.12479018
   CMAKE_VERSION: 3.22.1
-  # Keep ccache inside the workspace so the cache action picks it up from one path.
+  # ccache lives in the workspace so one cache path covers it.
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   CCACHE_MAXSIZE: 3G
   CCACHE_COMPRESS: "true"
   CCACHE_COMPRESSLEVEL: "6"
   CCACHE_NOHASHDIR: "true"
-  # NDK + CMake rewrite mtimes and embed absolute paths; without this almost nothing hits.
-  CCACHE_SLOPPINESS: "time_macros,include_file_mtime,include_file_ctime,file_stat_matches"
+  # NDK/CMake rewrite mtimes and embed absolute paths; without this nearly nothing hits.
+  CCACHE_COMPILERCHECK: content
+  CCACHE_SLOPPINESS: "pch_defines,time_macros,include_file_mtime,include_file_ctime"
 
 jobs:
   build:
@@ -34,8 +36,6 @@ jobs:
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
-          # the NDK is restored from cache below
-          sudo rm -rf /usr/local/lib/android/sdk/ndk/*
 
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -55,6 +55,19 @@ jobs:
           cache-read-only: false
           gradle-home-cache-cleanup: true
 
+      # The cached SDK/NDK was written by root; tar cannot overwrite root-owned
+      # files, so the restore used to fail silently. Hand the paths to the runner.
+      - name: Fix SDK ownership for cache restore
+        run: |
+          for p in \
+            "$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" \
+            "$ANDROID_SDK_ROOT/cmake/$CMAKE_VERSION" \
+            "$ANDROID_SDK_ROOT/platforms/android-36" \
+            "$ANDROID_SDK_ROOT/build-tools/36.0.0"; do
+            [ -e "$p" ] && sudo chown -R "$(id -u):$(id -g)" "$p"
+          done
+          exit 0
+
       - name: Restore Android SDK / NDK / CMake
         uses: actions/cache/restore@v4
         id: cache-ndk
@@ -69,8 +82,8 @@ jobs:
       - name: Install Android NDK & SDK Components
         if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
-          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager \
+          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager \
             "platforms;android-36" "build-tools;36.0.0" \
             "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
 
@@ -91,28 +104,36 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq ccache
           ccache --version
-          ccache --set-config=max_size=${CCACHE_MAXSIZE}
-          ccache --set-config=compression=true
-          ccache --set-config=sloppiness=${CCACHE_SLOPPINESS}
-          ccache -z
 
-      - name: Restore ccache + native build dirs
+      # Native build dirs are deliberately NOT cached: checkout stamps sources
+      # newer than the restored .o files, so ninja rebuilds everything anyway.
+      - name: Restore ccache
         uses: actions/cache/restore@v4
         with:
-          path: |
-            .ccache
-            TMessagesProj/.cxx
-            TMessagesProj_AppStandalone/.cxx
-          # rolling key: a fresh entry per attempt, but restore-keys always seeds from
-          # the newest previous run, so the ccache keeps growing across pushes.
-          key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .ccache
+          # rolling key: one fresh entry per attempt, restore-keys always seeds from
+          # the newest previous run so the ccache keeps growing across pushes.
+          key: ${{ runner.os }}-ccache-arm64-v8a-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ${{ runner.os }}-ccache-${{ github.ref_name }}-
+            ${{ runner.os }}-ccache-arm64-v8a-${{ github.ref_name }}-
+            ${{ runner.os }}-ccache-arm64-v8a-
             ${{ runner.os }}-ccache-
+
+      # Must run AFTER the restore: the restored cache contains an old ccache.conf
+      # and the pre-restore `ccache -M` settings would be overwritten.
+      - name: Configure Ccache
+        run: |
+          mkdir -p "$CCACHE_DIR"
+          ccache --set-config=max_size=$CCACHE_MAXSIZE
+          ccache --set-config=compression=true
+          ccache --set-config=compiler_check=content
+          ccache --set-config=sloppiness=$CCACHE_SLOPPINESS
+          ccache -z
+          ccache -s
 
       - name: Set Environment Variables
         run: |
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> $GITHUB_ENV
           echo "USE_CCACHE=1" >> $GITHUB_ENV
 
       - name: Build APK
@@ -123,16 +144,13 @@ jobs:
           echo "--- ccache stats ---"
           ccache -s
 
-      - name: Save ccache + native build dirs
+      - name: Save ccache
         if: always()
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
-          path: |
-            .ccache
-            TMessagesProj/.cxx
-            TMessagesProj_AppStandalone/.cxx
-          key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .ccache
+          key: ${{ runner.os }}-ccache-arm64-v8a-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
