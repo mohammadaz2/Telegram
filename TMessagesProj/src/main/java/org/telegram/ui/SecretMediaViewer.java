@@ -11,6 +11,7 @@ package org.telegram.ui;
 import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.dpf2;
 
+import android.Manifest;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
@@ -19,6 +20,7 @@ import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -73,10 +75,12 @@ import androidx.media3.common.C;
 import androidx.media3.exoplayer.ExoPlayer;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
@@ -89,12 +93,15 @@ import org.telegram.messenger.utils.WindowVisibilityManager;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.ActionBarMenu;
+import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.SimpleTextView;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.TextSelectionHelper;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
 import org.telegram.ui.Components.AnimatedEmojiSpan;
 import org.telegram.ui.Components.AnimationProperties;
+import org.telegram.ui.Components.BulletinFactory;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.PlayPauseDrawable;
@@ -347,6 +354,8 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
     private VideoPlayer videoPlayer;
     private boolean isPlaying;
     private ActionBar actionBar;
+    private final static int gallery_menu_save = 1;
+    private ActionBarMenuItem saveItem;
     private AnimatorSet currentActionBarAnimation;
     private boolean videoWatchedOneTime;
     private boolean closeVideoAfterWatch;
@@ -854,6 +863,9 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
                 super.setAlpha(alpha);
                 secretHint.setAlpha(alpha);
                 secretDeleteTimer.setAlpha(alpha);
+                if (saveItem != null) {
+                    saveItem.setAlpha(alpha);
+                }
             }
         };
         actionBar.setTitleColor(0xffffffff);
@@ -863,17 +875,67 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
         actionBar.setItemsBackgroundColor(Theme.ACTION_BAR_WHITE_SELECTOR_COLOR, false);
         actionBar.setItemsColor(Color.WHITE, false);
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
-        actionBar.setTitleRightMargin(dp(70));
+        actionBar.setTitleRightMargin(dp(110));
         containerView.addView(actionBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        ActionBarMenu menu = actionBar.createMenu();
+        saveItem = menu.addItem(gallery_menu_save, R.drawable.msg_download);
+        saveItem.setContentDescription(LocaleController.getString(R.string.SaveToGallery));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
                 if (id == -1) {
                     closePhoto(true, false);
+                } else if (id == gallery_menu_save) {
+                    saveCurrentMediaToGallery();
                 }
             }
         });
 
+    private void saveCurrentMediaToGallery() {
+        if (currentMessageObject == null || parentActivity == null) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 23 && (Build.VERSION.SDK_INT <= 28 || BuildVars.NO_SCOPED_STORAGE) && parentActivity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            parentActivity.requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 4);
+            return;
+        }
+        File file = null;
+        final boolean isVideoType = isVideo;
+        if (isVideoType) {
+            if (currentMessageObject.messageOwner.attachPath != null) {
+                File f = new File(currentMessageObject.messageOwner.attachPath);
+                if (f.exists()) {
+                    file = f;
+                }
+            }
+            if (file == null) {
+                TLRPC.Document document = currentMessageObject.getDocument();
+                File f = currentMessageObject.isLivePhoto() ? FileLoader.getInstance(currentAccount).getPathToAttach(document, null, true) : FileLoader.getInstance(currentAccount).getPathToMessage(currentMessageObject.messageOwner);
+                File encryptedFile = new File(f.getAbsolutePath() + ".enc");
+                if (encryptedFile.exists()) {
+                    file = encryptedFile;
+                } else if (f.exists()) {
+                    file = f;
+                }
+            }
+        } else {
+            TLRPC.PhotoSize sizeFull = FileLoader.getClosestPhotoSizeWithSize(currentMessageObject.photoThumbs, AndroidUtilities.getPhotoSize());
+            if (sizeFull != null) {
+                file = FileLoader.getInstance(currentAccount).getPathToAttach(sizeFull, true);
+                if (!file.exists()) {
+                    file = FileLoader.getInstance(currentAccount).getPathToAttach(sizeFull, false);
+                }
+            }
+            if (file == null || !file.exists()) {
+                file = FileLoader.getInstance(currentAccount).getPathToMessage(currentMessageObject.messageOwner);
+            }
+        }
+        if (file != null && file.exists()) {
+            MediaController.saveFile(file.getAbsolutePath(), parentActivity, isVideoType ? 1 : 0, null, null, uri -> {
+                BulletinFactory.createSaveToGalleryBulletin(containerView, isVideoType, 0xf9222222, 0xffffffff).show();
+            });
+        }
+    }
         secretHint = new HintView2(activity, HintView2.DIRECTION_TOP);
         secretHint.setJoint(1, -26);
         secretHint.setPadding(dp(8), dp(8), dp(8), dp(8));
@@ -965,7 +1027,7 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
                 WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR |
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                 WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS;
-        windowLayoutParams.flags |= WindowManager.LayoutParams.FLAG_SECURE;
+        windowLayoutParams.flags &= ~WindowManager.LayoutParams.FLAG_SECURE;
         AndroidUtilities.logFlagSecure();
         centerImage.setParentView(containerView);
         centerImage.setForceCrossfade(true);

@@ -575,6 +575,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private TLRPC.FileLocation avatarBig;
     private ImageLocation uploadingImageLocation;
 
+    private final static int hide_in_groups_contact = 250;
     private final static int add_contact = 1;
     private final static int block_contact = 2;
     private final static int share_contact = 3;
@@ -2567,6 +2568,12 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         return;
                     }
                     finishFragment();
+                } else if (id == hide_in_groups_contact) {
+                    boolean currentlyHidden = getMessagesController().isUserHiddenInGroups(userId);
+                    boolean newHidden = !currentlyHidden;
+                    getMessagesController().setUserHiddenInGroups(userId, newHidden);
+                    createActionBarMenu();
+                    BulletinFactory.of(ProfileActivity.this).createSimpleBulletin(R.raw.contact_check, LocaleController.getString(newHidden ? R.string.UserMessagesHiddenInGroups : R.string.UserMessagesShownInGroups)).show();
                 } else if (id == block_contact) {
                     onBlockContactClicked(false);
                 } else if (id == add_contact) {
@@ -12425,6 +12432,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                             }
                         } else {
                             otherItem.addSubItem(block_contact, !userBlocked ? R.drawable.msg_block : R.drawable.msg_block, !userBlocked ? LocaleController.getString(R.string.BlockContact) : LocaleController.getString(R.string.Unblock));
+                    if (userBlocked && !user.self && !user.bot && currentEncryptedChat == null) {
+                        boolean isHidden = getMessagesController().isUserHiddenInGroups(userId);
+                        otherItem.addSubItem(hide_in_groups_contact, isHidden ? R.drawable.msg_user_remove : R.drawable.msg_user_remove, isHidden ? LocaleController.getString(R.string.ShowMessagesInGroups) : LocaleController.getString(R.string.HideMessagesInGroups));
+                    }
                         }
                     }
                 } else {
@@ -12435,6 +12446,10 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         otherItem.addSubItem(share_contact, R.drawable.msg_share, LocaleController.getString(R.string.ShareContact));
                     }
                     otherItem.addSubItem(block_contact, !userBlocked ? R.drawable.msg_block : R.drawable.msg_block, !userBlocked ? LocaleController.getString(R.string.BlockContact) : LocaleController.getString(R.string.Unblock));
+                    if (userBlocked && !user.self && !user.bot && currentEncryptedChat == null) {
+                        boolean isHidden = getMessagesController().isUserHiddenInGroups(userId);
+                        otherItem.addSubItem(hide_in_groups_contact, isHidden ? R.drawable.msg_user_remove : R.drawable.msg_user_remove, isHidden ? LocaleController.getString(R.string.ShowMessagesInGroups) : LocaleController.getString(R.string.HideMessagesInGroups));
+                    }
                     otherItem.addSubItem(edit_contact, R.drawable.msg_edit, LocaleController.getString(R.string.EditContact));
                     otherItem.addSubItem(delete_contact, R.drawable.msg_delete, LocaleController.getString(R.string.DeleteContact));
                 }

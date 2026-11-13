@@ -1960,6 +1960,10 @@
     <string name="PhoneCopied">Phone copied to clipboard</string>
     <string name="UserId">User ID</string>
     <string name="UserIdCopied">User ID copied to clipboard</string>
+    <string name="HideMessagesInGroups">Hide messages in groups</string>
+    <string name="ShowMessagesInGroups">Show messages in groups</string>
+    <string name="UserMessagesHiddenInGroups">Messages from this user are now hidden in groups</string>
+    <string name="UserMessagesShownInGroups">Messages from this user will now be shown in groups</string>
     <string name="EmailCopied">Email copied to clipboard</string>
     <string name="InviteToGroupByLink">Invite to Group via Link</string>
     <string name="InviteLink">Invite Link</string>

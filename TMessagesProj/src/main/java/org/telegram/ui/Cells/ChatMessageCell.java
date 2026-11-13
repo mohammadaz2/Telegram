@@ -4354,6 +4354,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (isHiddenInGroups()) {
+            return false;
+        }
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) lastTouchDownTime = event.getDownTime();
         if (currentMessageObject == null || delegate != null && !delegate.canPerformActions() || animationRunning) {
             if (currentMessageObject != null && currentMessageObject.richLayout != null
@@ -12162,7 +12165,34 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     @Override
+    public boolean isHiddenInGroups() {
+        if (currentMessageObject == null) {
+            return false;
+        }
+        boolean isGroup = (isChat && (isMegagroup || currentChat != null && !ChatObject.isChannelAndNotMegaGroup(currentChat)));
+        if (!isGroup && currentMessageObject.getDialogId() < 0) {
+            isGroup = true;
+        }
+        if (!isGroup) {
+            return false;
+        }
+        long senderId = currentMessageObject.getSenderId();
+        if (senderId > 0 && MessagesController.getInstance(currentAccount).isUserHiddenInGroups(senderId)) {
+            return true;
+        }
+        long fromChatId = currentMessageObject.getFromChatId();
+        if (fromChatId > 0 && MessagesController.getInstance(currentAccount).isUserHiddenInGroups(fromChatId)) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        if (isHiddenInGroups()) {
+            setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), 0);
+            return;
+        }
         if (currentMessageObject != null && (currentMessageObject.checkLayout() || lastHeight != AndroidUtilities.displaySize.y)) {
             inLayout = true;
             MessageObject messageObject = currentMessageObject;
@@ -17322,7 +17352,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         drawInternal(canvas);
     }
     public void drawInternal(Canvas canvas) {
-        if (currentMessageObject == null) {
+        if (currentMessageObject == null || isHiddenInGroups()) {
             return;
         }
         if (!wasLayout) {

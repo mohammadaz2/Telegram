@@ -6671,6 +6671,24 @@ public class MessagesController extends BaseController implements NotificationCe
         });
     }
 
+    public boolean isUserHiddenInGroups(long userId) {
+        if (userId == 0) {
+            return false;
+        }
+        return getMainSettings().getBoolean("hide_group_msg_" + userId, false);
+    }
+
+    public void setUserHiddenInGroups(long userId, boolean hide) {
+        if (userId == 0) {
+            return;
+        }
+        if (hide) {
+            getMainSettings().edit().putBoolean("hide_group_msg_" + userId, true).apply();
+        } else {
+            getMainSettings().edit().remove("hide_group_msg_" + userId).apply();
+        }
+    }
+
     public boolean isChatNoForwards(TLRPC.Chat chat) {
         if (chat == null) {
             return false;
