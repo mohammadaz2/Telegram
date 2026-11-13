@@ -1958,6 +1958,8 @@
     <string name="LinkCopiedPrivateInfo">This link will only work for members of this chat.</string>
     <string name="LinkNotFound">Unfortunately, you can\'t access this message. You are not a member of the chat where it was posted.</string>
     <string name="PhoneCopied">Phone copied to clipboard</string>
+    <string name="UserId">User ID</string>
+    <string name="UserIdCopied">User ID copied to clipboard</string>
     <string name="EmailCopied">Email copied to clipboard</string>
     <string name="InviteToGroupByLink">Invite to Group via Link</string>
     <string name="InviteLink">Invite Link</string>

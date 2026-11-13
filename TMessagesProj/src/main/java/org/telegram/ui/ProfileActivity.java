@@ -666,6 +666,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int infoHeaderRowEmpty;
     private int infoEndRowEmpty;
     private int phoneRow;
+    private int userIdRow;
     private int noteRow;
     private int locationRow;
     private int userInfoRow;
@@ -7638,6 +7639,32 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             }
             o.show();
             return true;
+        } else if (position == userIdRow) {
+            long targetId = userId;
+            if (targetId == 0) {
+                TLRPC.User user = getMessagesController().getUser(userId);
+                if (user != null) {
+                    targetId = user.id;
+                } else {
+                    targetId = getUserConfig().getClientUserId();
+                }
+            }
+            if (targetId != 0) {
+                try {
+                    android.content.ClipboardManager clipboard = (android.content.ClipboardManager) ApplicationLoader.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE);
+                    android.content.ClipData clip = android.content.ClipData.newPlainText("User ID", String.valueOf(targetId));
+                    clipboard.setPrimaryClip(clip);
+                    if (AndroidUtilities.shouldShowClipboardToast()) {
+                        BulletinFactory.of(this).createCopyBulletin(LocaleController.getString("UserIdCopied", R.string.UserIdCopied)).show();
+                    }
+                    try {
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                    } catch (Exception ignore) {}
+                } catch (Exception e) {
+                    FileLog.e(e);
+                }
+                return true;
+            }
         } else if (position == channelInfoRow || position == userInfoRow || position == locationRow || position == bioRow) {
             if (position == bioRow && (userInfo == null || TextUtils.isEmpty(userInfo.about))) {
                 return false;
@@ -10879,6 +10906,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         infoHeaderRowEmpty = -1;
         infoEndRowEmpty = -1;
         phoneRow = -1;
+        userIdRow = -1;
         noteRow = -1;
         userInfoRow = -1;
         locationRow = -1;
@@ -10985,6 +11013,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
                 numberSectionRow = rowCount++;
                 numberRow = rowCount++;
+                userIdRow = rowCount++;
                 setUsernameRow = rowCount++;
                 bioRow = rowCount++;
 
@@ -11071,6 +11100,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 infoStartRow = rowCount;
                 if (!isBot && (hasPhone || !hasInfo)) {
                     phoneRow = rowCount++;
+                }
+                if (user != null || userId != 0) {
+                    userIdRow = rowCount++;
                 }
                 if (userInfo != null && !TextUtils.isEmpty(userInfo.about)) {
                     userInfoRow = rowCount++;
@@ -13669,6 +13701,17 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         }
                         isFragmentPhoneNumber = phoneNumber != null && phoneNumber.matches("888\\d{8}");
                         detailCell.setTextAndValue(text, LocaleController.getString(isFragmentPhoneNumber ? R.string.AnonymousNumber : R.string.PhoneMobile), false);
+                    } else if (position == userIdRow) {
+                        long targetId = userId;
+                        if (targetId == 0) {
+                            TLRPC.User user = getMessagesController().getUser(userId);
+                            if (user != null) {
+                                targetId = user.id;
+                            } else {
+                                targetId = getUserConfig().getClientUserId();
+                            }
+                        }
+                        detailCell.setTextAndValue(String.valueOf(targetId), LocaleController.getString("UserId", R.string.UserId), false);
                     } else if (position == noteRow) {
                         final TLRPC.UserFull userInfo = getMessagesController().getUserFull(userId);
                         if (userInfo == null) return;
@@ -14487,7 +14530,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             if (position == infoHeaderRow || position == membersHeaderRow || position == settingsSectionRow2 ||
                     position == numberSectionRow || position == helpHeaderRow || position == debugHeaderRow || position == botPermissionsHeader) {
                 return VIEW_TYPE_HEADER;
-            } else if (position == phoneRow || position == locationRow || position == numberRow || position == birthdayRow) {
+            } else if (position == phoneRow || position == locationRow || position == numberRow || position == birthdayRow || position == userIdRow) {
                 return VIEW_TYPE_TEXT_DETAIL;
             } else if (position == usernameRow || position == setUsernameRow) {
                 return VIEW_TYPE_TEXT_DETAIL_MULTILINE;
@@ -15812,6 +15855,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, infoHeaderRowEmpty, sparseIntArray);
             put(++pointer, infoEndRowEmpty, sparseIntArray);
             put(++pointer, phoneRow, sparseIntArray);
+            put(++pointer, userIdRow, sparseIntArray);
             put(++pointer, noteRow, sparseIntArray);
             put(++pointer, locationRow, sparseIntArray);
             put(++pointer, userInfoRow, sparseIntArray);
@@ -16415,6 +16459,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         } else if (position == phoneRow) {
             textToCopy = user.phone;
             copiedText = getString(R.string.PhoneCopied);
+        } else if (position == userIdRow) {
+            textToCopy = String.valueOf(user.id);
+            copiedText = LocaleController.getString("UserIdCopied", R.string.UserIdCopied);
         } else if (position == birthdayRow) {
             textToCopy = UserInfoActivity.birthdayString(userInfo.birthday);
             copiedText = getString(R.string.BirthdayCopied);
