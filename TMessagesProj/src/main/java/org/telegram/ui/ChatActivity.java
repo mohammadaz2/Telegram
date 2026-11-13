@@ -10903,7 +10903,7 @@ public class ChatActivity extends BaseFragment implements
             @Override
             public void onReactionClicked(View view, ReactionsLayoutInBubble.VisibleReaction visibleReaction, boolean longpress, boolean addToRecent) {
                 if (tagSelector == null) return;
-                if (getDialogId() == getUserConfig().getClientUserId() && !getUserConfig().isPremium()) {
+                if (false && getDialogId() == getUserConfig().getClientUserId() && !getUserConfig().isPremium()) {
                     new PremiumFeatureBottomSheet(ChatActivity.this, PremiumPreviewFragment.PREMIUM_FEATURE_SAVED_TAGS, true).show();
                     clearSelectionMode(false);
                     return;
@@ -33853,7 +33853,7 @@ public class ChatActivity extends BaseFragment implements
             return;
         }
 
-        if (getDialogId() == getUserConfig().getClientUserId() && !getUserConfig().isPremium() && primaryMessage.messageOwner != null && (primaryMessage.messageOwner.reactions == null || (primaryMessage.messageOwner.reactions.reactions_as_tags || primaryMessage.messageOwner.reactions.results.isEmpty()))) {
+        if (false && getDialogId() == getUserConfig().getClientUserId() && !getUserConfig().isPremium()) {
             new PremiumFeatureBottomSheet(ChatActivity.this, PremiumPreviewFragment.PREMIUM_FEATURE_SAVED_TAGS, true).show();
             return;
         }
@@ -45994,7 +45994,7 @@ public class ChatActivity extends BaseFragment implements
             return;
         }
         if (messageObject == null) return;
-        if (getUserConfig().getClientUserId() == getDialogId() && messageObject.areTags() && !getUserConfig().isPremium()) {
+        if (false && getUserConfig().getClientUserId() == getDialogId() && messageObject.areTags() && !getUserConfig().isPremium()) {
             if (longpress) return;
             new PremiumFeatureBottomSheet(ChatActivity.this, PremiumPreviewFragment.PREMIUM_FEATURE_SAVED_TAGS, true).show();
             return;
