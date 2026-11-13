@@ -29,16 +29,48 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Setup Gradle Cache
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: false
+
+      - name: Cache NDK & CMake Prebuilts
+        uses: actions/cache@v4
+        id: cache-ndk
+        with:
+          path: |
+            /usr/local/lib/android/sdk/ndk/27.2.12479018
+            /usr/local/lib/android/sdk/cmake/3.22.1
+            /usr/local/lib/android/sdk/platforms/android-36
+            /usr/local/lib/android/sdk/build-tools/36.0.0
+          key: ${{ runner.os }}-android-sdk-ndk-27.2
+
+      - name: Cache Ccache & Native Build Objects
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ccache
+            .cxx
+            TMessagesProj/.cxx
+            TMessagesProj_AppStandalone/.cxx
+          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
       - name: Install Android NDK & SDK Components
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
         run: |
           echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
           sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Set Environment Variables
+        run: |
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.2.12479018" >> $GITHUB_ENV
 
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace --no-daemon
+          ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace --build-cache --parallel
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
