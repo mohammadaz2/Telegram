@@ -136,6 +136,16 @@ jobs:
           echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> $GITHUB_ENV
           echo "USE_CCACHE=1" >> $GITHUB_ENV
 
+      # Cheap pre-flight: compiles all Java + generates R/resource classes but skips
+      # the native build, lint and packaging. A javac error fails here in ~2-4 min
+      # instead of ~12 min into assemble. On success the assemble step reuses these
+      # classes (UP-TO-DATE), so the happy path pays ~20 s for one extra Gradle call.
+      - name: Compile gate (fail fast before native build)
+        run: |
+          chmod +x gradlew
+          ./gradlew :TMessagesProj:compileStandaloneJavaWithJavac \
+            --stacktrace -Dorg.gradle.caching=true
+
       - name: Build APK
         run: |
           chmod +x gradlew
