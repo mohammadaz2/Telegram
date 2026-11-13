@@ -39,6 +39,7 @@ import androidx.annotation.StringRes;
 import org.telegram.utils.localization.Localization;
 import org.telegram.localization.LocalizationUtils;
 import org.telegram.messenger.time.FastDateFormat;
+import org.telegram.messenger.time.ShamsiFastDateFormat;
 import org.telegram.tgnet.Vector;
 import org.telegram.ui.Components.TypefaceSpan;
 import org.telegram.ui.Stars.StarsController;
@@ -2682,10 +2683,10 @@ public class LocaleController {
         }
         FastDateFormat formatter;
         try {
-            formatter = FastDateFormat.getInstance(format, locale);
+            formatter = ShamsiFastDateFormat.getInstance(format, locale);
         } catch (Exception e) {
             format = defaultFormat;
-            formatter = FastDateFormat.getInstance(format, locale);
+            formatter = ShamsiFastDateFormat.getInstance(format, locale);
         }
         return formatter;
     }
@@ -2778,6 +2779,14 @@ public class LocaleController {
     public static String formatYearMonthDay(long date, boolean alwaysShowYear) {
         try {
             date *= 1000;
+            if (ShamsiFastDateFormat.isShamsiEnabled()) {
+                final int[] jalali = ShamsiFastDateFormat.getJalaliDate(date);
+                final int[] todayJalali = ShamsiFastDateFormat.getJalaliDate(System.currentTimeMillis());
+                final Locale currentLocale = getInstance().currentLocale;
+                final Locale locale = currentLocale == null ? Locale.getDefault() : currentLocale;
+                final String format = todayJalali[0] == jalali[0] && !alwaysShowYear ? "MMMM d" : "MMMM d, yyyy";
+                return ShamsiFastDateFormat.getInstance(format, locale).format(date);
+            }
             Calendar rightNow = Calendar.getInstance();
             int year = rightNow.get(Calendar.YEAR);
             rightNow.setTimeInMillis(date);
@@ -2811,6 +2820,25 @@ public class LocaleController {
     }
 
     public static String formatYearMont(long date, boolean alwaysShowYear) {
+        try {
+            if (ShamsiFastDateFormat.isShamsiEnabled()) {
+                final long millis = date * 1000;
+                final int[] jalali = ShamsiFastDateFormat.getJalaliDate(millis);
+                final int[] todayJalali = ShamsiFastDateFormat.getJalaliDate(System.currentTimeMillis());
+                final Locale currentLocale = getInstance().currentLocale;
+                final Locale locale = currentLocale == null ? Locale.getDefault() : currentLocale;
+                final String format = todayJalali[0] == jalali[0] && !alwaysShowYear ? "MMMM" : "MMMM yyyy";
+                return ShamsiFastDateFormat.getInstance(format, locale).format(millis);
+            }
+            return formatYearMontGregorian(date, alwaysShowYear);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return "LOC_ERR";
+    }
+
+    /** Gregorian variant of {@link #formatYearMont(long, boolean)}; used by the date picker, whose grid is Gregorian. */
+    public static String formatYearMontGregorian(long date, boolean alwaysShowYear) {
         try {
             date *= 1000;
             Calendar rightNow = Calendar.getInstance();

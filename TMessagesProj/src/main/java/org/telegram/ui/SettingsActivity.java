@@ -81,6 +81,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.SharedPrefsHelper;
+import org.telegram.messenger.time.ShamsiFastDateFormat;
 import org.telegram.utils.glass.BaseFragmentSimpleGlass;
 import org.telegram.ui.Cells.TextCell;
 import org.telegram.ui.Wallet.GramWallet;
@@ -154,6 +155,7 @@ import java.util.HashSet;
 public class SettingsActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, ImageUpdater.ImageUpdaterDelegate, MainTabsActivity.TabFragmentDelegate, FactorAnimator.Target {
 
     private static final int ANIMATOR_ID_SEARCH_PAGE_VISIBLE = 0;
+    private static final int SHAMSI_DATES_ROW = 1000;
 
     private final BoolAnimator animatorSearchPageVisible = new BoolAnimator(ANIMATOR_ID_SEARCH_PAGE_VISIBLE,
             this, CubicBezierInterpolator.EASE_OUT_QUINT, 350);
@@ -806,6 +808,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(SettingCell.Factory.of(10, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_language, getString(R.string.SettingsLanguage), LocaleController.getCurrentLanguageName()));
 
         items.add(UItem.asShadow(null));
+
+        items.add(UItem.asSwitch(SHAMSI_DATES_ROW, getString(R.string.ShamsiDates)).setChecked(ShamsiFastDateFormat.isShamsiEnabled()));
+        items.add(UItem.asShadow(getString(R.string.ShamsiDatesInfo)));
         if (!walletAbove && getMessagesController().config.walletAvailable.get()) {
             final GramWallet wallet = GramWallet.getInstance(currentAccount);
             items.add(SettingCell.Factory.of(25, 0, 0, Theme.isCurrentThemeDark() ? R.drawable.settings_wallet_dark : R.drawable.settings_wallet, TextCell.applyNewSpanTimed(getString(R.string.WalletAttachMoney), 1790679020), null, wallet.getBalance() > 0 ? GramWallet.formatGrams(wallet.getBalance()) : null));
@@ -1001,6 +1006,19 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             }
             case 27: {
                 presentFragment(new HeaderSettingsActivity());
+                break;
+            }
+            case SHAMSI_DATES_ROW: {
+                final boolean enabled = !ShamsiFastDateFormat.isShamsiEnabled();
+                ShamsiFastDateFormat.setShamsiEnabled(enabled);
+                LocaleController.getInstance().recreateFormatters();
+                if (listView != null && listView.adapter != null) {
+                    listView.adapter.update(true);
+                }
+                AndroidUtilities.runOnUIThread(() -> {
+                    NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
+                    NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.reloadInterface);
+                });
                 break;
             }
         }

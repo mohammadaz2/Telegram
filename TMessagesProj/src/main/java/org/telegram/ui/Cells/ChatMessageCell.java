@@ -1454,6 +1454,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     public byte[] doNotDrawPollId;
     public byte[] drawOnlyPollId;
     public boolean isChat;
+    private boolean hiddenInGroups;
     public boolean isBotForum;
     public boolean isSavedChat;
     public boolean isSavedPreviewChat;
@@ -5252,6 +5253,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     public void copyParamsTo(ChatMessageCell cell) {
         if (cell == null) return;
         cell.isChat = isChat;
+        cell.hiddenInGroups = hiddenInGroups;
         cell.isReportChat = isReportChat;
         cell.isSavedChat = isSavedChat;
         cell.isSavedPreviewChat = isSavedPreviewChat;
@@ -6248,6 +6250,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     public MultiLayoutTypingAnimator botDraftTypingAnimator;
 
     private void setMessageContent(MessageObject messageObject, MessageObject.GroupedMessages groupedMessages, boolean bottomNear, boolean topNear, boolean firstInChat, boolean lastInChatList) {
+        hiddenInGroups = computeIsHiddenInGroups(messageObject);
         if (messageObject.checkLayout() || currentPosition != null && lastHeight != AndroidUtilities.displaySize.y) {
             currentMessageObject = null;
         }
@@ -11900,6 +11903,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             firstInChatToSet = firstInChat;
             lastInChatListToSet = lastInChatList;
         }
+        hiddenInGroups = computeIsHiddenInGroups(messageObject);
     }
 
     private boolean frozen;
@@ -12165,25 +12169,44 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public boolean isHiddenInGroups() {
-        if (currentMessageObject == null) {
+        return hiddenInGroups;
+    }
+
+    private boolean isGroupContextForHidden() {
+        boolean isGroup = (isChat && (isMegagroup || currentChat != null && !ChatObject.isChannelAndNotMegaGroup(currentChat)));
+        if (!isGroup && currentMessageObject != null && currentMessageObject.getDialogId() < 0) {
+            isGroup = true;
+        }
+        return isGroup;
+    }
+
+    private boolean isMessageSenderHiddenInGroups(MessageObject messageObject) {
+        if (messageObject == null) {
+            return false;
+        }
+        long senderId = messageObject.getSenderId();
+        if (senderId > 0 && MessagesController.getInstance(currentAccount).isUserHiddenInGroups(senderId)) {
+            return true;
+        }
+        long fromChatId = messageObject.getFromChatId();
+        if (fromChatId > 0 && MessagesController.getInstance(currentAccount).isUserHiddenInGroups(fromChatId)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean computeIsHiddenInGroups(MessageObject messageObject) {
+        if (messageObject == null) {
             return false;
         }
         boolean isGroup = (isChat && (isMegagroup || currentChat != null && !ChatObject.isChannelAndNotMegaGroup(currentChat)));
-        if (!isGroup && currentMessageObject.getDialogId() < 0) {
+        if (!isGroup && messageObject.getDialogId() < 0) {
             isGroup = true;
         }
         if (!isGroup) {
             return false;
         }
-        long senderId = currentMessageObject.getSenderId();
-        if (senderId > 0 && MessagesController.getInstance(currentAccount).isUserHiddenInGroups(senderId)) {
-            return true;
-        }
-        long fromChatId = currentMessageObject.getFromChatId();
-        if (fromChatId > 0 && MessagesController.getInstance(currentAccount).isUserHiddenInGroups(fromChatId)) {
-            return true;
-        }
-        return false;
+        return isMessageSenderHiddenInGroups(messageObject);
     }
 
     @Override
@@ -16608,6 +16631,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                     }
 
 
+                    if (messageObject.replyMessageObject != null && isGroupContextForHidden() && isMessageSenderHiddenInGroups(messageObject.replyMessageObject)) {
+                        name = getString(R.string.BlockedUser);
+                    }
                     if (name == null) {
                         name = getString("Loading", R.string.Loading);
                     }
@@ -17080,7 +17106,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public ImageReceiver getAvatarImage() {
-        return isAvatarVisible ? avatarImage : null;
+        return isAvatarVisible && !hiddenInGroups ? avatarImage : null;
     }
 
     public float getCheckBoxTranslation() {
@@ -17597,7 +17623,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
     @SuppressLint("WrongCall")
     private boolean drawBackgroundInternal(Canvas canvas, boolean fromParent, boolean internal) {
-        if (currentMessageObject == null) {
+        if (currentMessageObject == null || hiddenInGroups) {
             return false;
         }
         if (!wasLayout && !animationRunning) {
@@ -19249,6 +19275,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public void drawNamesLayout(Canvas canvas, float alpha) {
+        if (hiddenInGroups) {
+            return;
+        }
         long newAnimationTime = SystemClock.elapsedRealtime();
         long dt = newAnimationTime - lastNamesAnimationTime;
         if (dt > 17) {
@@ -20477,6 +20506,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public void drawCaptionLayout(Canvas canvas, boolean selectionOnly, float alpha) {
+        if (hiddenInGroups) {
+            return;
+        }
         if (animatedEmojiStack != null && !(canvas instanceof SizeNotifierFrameLayout.SimplerCanvas) && (captionLayout != null || transitionParams.animateOutCaptionLayout != null)) {
             animatedEmojiStack.clearPositions();
         }
@@ -20640,6 +20672,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public void drawCommentLayout(Canvas canvas, float alpha) {
+        if (hiddenInGroups) {
+            return;
+        }
         if (isCompactLayout()) {
             drawCompactCommentRow(canvas);
             return;
@@ -20934,6 +20969,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public void drawReactionsLayout(Canvas canvas, float alpha, Integer only) {
+        if (hiddenInGroups) {
+            return;
+        }
         if (isRoundVideo) {
             reactionsLayoutInBubble.drawServiceShaderBackground = 1f - getVideoTranscriptionProgress();
         }
@@ -21308,6 +21346,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     }
 
     public void drawTime(Canvas canvas, float alpha, boolean fromParent) {
+        if (hiddenInGroups) {
+            return;
+        }
         if (!drawFromPinchToZoom && delegate != null && delegate.getPinchToZoomHelper() != null && delegate.getPinchToZoomHelper().isInOverlayModeFor(this) && shouldDrawTimeOnMedia()) {
             return;
         }

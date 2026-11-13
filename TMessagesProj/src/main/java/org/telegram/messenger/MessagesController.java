@@ -8958,6 +8958,10 @@ public class MessagesController extends BaseController implements NotificationCe
         }
         totalBlockedCount--;
         blockePeers.delete(id);
+        if (id > 0 && isUserHiddenInGroups(id)) {
+            setUserHiddenInGroups(id, false);
+            getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, UPDATE_MASK_AVATAR);
+        }
         if (user != null) {
             req.id = getInputPeer(user);
         } else {

@@ -2572,6 +2572,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                     boolean currentlyHidden = getMessagesController().isUserHiddenInGroups(userId);
                     boolean newHidden = !currentlyHidden;
                     getMessagesController().setUserHiddenInGroups(userId, newHidden);
+                    getNotificationCenter().postNotificationName(NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_AVATAR);
                     createActionBarMenu(true);
                     BulletinFactory.of(ProfileActivity.this).createSimpleBulletin(R.raw.contact_check, LocaleController.getString(newHidden ? R.string.UserMessagesHiddenInGroups : R.string.UserMessagesShownInGroups)).show();
                 } else if (id == block_contact) {

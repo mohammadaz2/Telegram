@@ -1297,7 +1297,7 @@ public class CalendarActivity extends BaseFragment implements NotificationCenter
             int totalColumns = daysInMonth + startDayOfWeek;
             cellCount = (int) (totalColumns / 7f) + (totalColumns % 7 == 0 ? 0 : 1);
             calendar.set(year, monthInYear + 1, 0);
-            titleView.setText(LocaleController.formatYearMont(calendar.getTimeInMillis() / 1000, true));
+            titleView.setText(LocaleController.formatYearMontGregorian(calendar.getTimeInMillis() / 1000, true));
 
             updateRowSelections(this, false);
         }

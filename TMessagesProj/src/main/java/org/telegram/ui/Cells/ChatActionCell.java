@@ -313,6 +313,7 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
     private boolean actionPressed;
     private boolean isSpoilerRevealing;
     private int currentAccount = UserConfig.selectedAccount;
+    private boolean hiddenInGroups;
     private ImageReceiver imageReceiver;
     private Drawable wallpaperPreviewDrawable;
     private Path clipPath;
@@ -640,8 +641,29 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
     private boolean offerExpired;
     private int walletSendState = -1;
 
+    private boolean computeHiddenInGroups(MessageObject messageObject) {
+        if (messageObject == null || messageObject.getDialogId() >= 0) {
+            return false;
+        }
+        long senderId = messageObject.getSenderId();
+        if (senderId > 0 && MessagesController.getInstance(currentAccount).isUserHiddenInGroups(senderId)) {
+            return true;
+        }
+        long fromChatId = messageObject.getFromChatId();
+        if (fromChatId > 0 && MessagesController.getInstance(currentAccount).isUserHiddenInGroups(fromChatId)) {
+            return true;
+        }
+        return false;
+    }
+
     public void setMessageObject(MessageObject messageObject, boolean force) {
         if (messageObject == null) return;
+        final boolean newHiddenInGroups = computeHiddenInGroups(messageObject);
+        if (newHiddenInGroups != hiddenInGroups) {
+            hiddenInGroups = newHiddenInGroups;
+            requestLayout();
+            invalidate();
+        }
         if (currentMessageObject != messageObject && walletSlidingOffset != 0) setWalletSlidingOffset(0);
         final boolean walletStateChanged = messageObject.messageOwner != null
                 && messageObject.messageOwner.action instanceof TLRPC.TL_messageActionGramTransfer
@@ -1916,6 +1938,10 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        if (hiddenInGroups) {
+            setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), 0);
+            return;
+        }
         View diamond = walletActionLayout == null ? null : walletActionLayout.getDiamondSurface();
         if (diamond != null) {
             final int spec = MeasureSpec.makeMeasureSpec(dp(42), MeasureSpec.EXACTLY);
@@ -2936,6 +2962,9 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
 
     @Override
     protected void onDraw(Canvas canvas) {
+        if (hiddenInGroups) {
+            return;
+        }
         canvas.save();
         canvas.translate(sideMenuWidth / 2f, getPaddingTop());
 
@@ -3517,6 +3546,9 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
     }
 
     public void drawBackground(Canvas canvas, boolean fromParent) {
+        if (hiddenInGroups) {
+            return;
+        }
         if (canDrawInParent) {
             if (hasGradientService() && !fromParent) {
                 return;
@@ -4041,6 +4073,9 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
     }
 
     public void drawReactions(Canvas canvas, boolean fromParent, Integer only) {
+        if (hiddenInGroups) {
+            return;
+        }
         if (canDrawInParent) {
             if (hasGradientService() && !fromParent) {
                 return;
@@ -4053,6 +4088,9 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
     }
 
     public void drawReactionsLayout(Canvas canvas, boolean fromParent, Integer only) {
+        if (hiddenInGroups) {
+            return;
+        }
         final float alpha = fromParent ? getAlpha() : 1.0f;
         if (alpha <= 0) {
             return;
@@ -4075,6 +4113,9 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
     }
 
     public void drawReactionsLayoutOverlay(Canvas canvas, boolean fromParent) {
+        if (hiddenInGroups) {
+            return;
+        }
         final float alpha = fromParent ? getAlpha() : 1.0f;
         if (themeDelegate != null) {
             themeDelegate.applyServiceShaderMatrix(getMeasuredWidth(), backgroundHeight, viewTranslationX, viewTop + dp(4));
@@ -4228,6 +4269,9 @@ public class ChatActionCell extends BaseCell implements DownloadController.FileD
     }
 
     public void drawOutboundsContent(Canvas canvas) {
+        if (hiddenInGroups) {
+            return;
+        }
         canvas.save();
         canvas.translate(sideMenuWidth / 2f, getPaddingTop());
 
