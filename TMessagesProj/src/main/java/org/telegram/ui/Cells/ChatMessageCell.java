@@ -12164,7 +12164,6 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         super.requestLayout();
     }
 
-    @Override
     public boolean isHiddenInGroups() {
         if (currentMessageObject == null) {
             return false;

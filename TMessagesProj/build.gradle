@@ -152,6 +152,12 @@ android {
 
         multiDexEnabled true
 
+        // Native build is per-ABI and costs ~13 min each. Restrict it at the module
+        // that owns CMake (the app-flavor abiFilters alone does not prune these tasks).
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+
         externalNativeBuild {
             cmake {
                 version '3.22.1'

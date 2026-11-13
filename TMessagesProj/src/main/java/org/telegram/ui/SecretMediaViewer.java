@@ -891,51 +891,6 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
             }
         });
 
-    private void saveCurrentMediaToGallery() {
-        if (currentMessageObject == null || parentActivity == null) {
-            return;
-        }
-        if (Build.VERSION.SDK_INT >= 23 && (Build.VERSION.SDK_INT <= 28 || BuildVars.NO_SCOPED_STORAGE) && parentActivity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            parentActivity.requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 4);
-            return;
-        }
-        File file = null;
-        final boolean isVideoType = isVideo;
-        if (isVideoType) {
-            if (currentMessageObject.messageOwner.attachPath != null) {
-                File f = new File(currentMessageObject.messageOwner.attachPath);
-                if (f.exists()) {
-                    file = f;
-                }
-            }
-            if (file == null) {
-                TLRPC.Document document = currentMessageObject.getDocument();
-                File f = currentMessageObject.isLivePhoto() ? FileLoader.getInstance(currentAccount).getPathToAttach(document, null, true) : FileLoader.getInstance(currentAccount).getPathToMessage(currentMessageObject.messageOwner);
-                File encryptedFile = new File(f.getAbsolutePath() + ".enc");
-                if (encryptedFile.exists()) {
-                    file = encryptedFile;
-                } else if (f.exists()) {
-                    file = f;
-                }
-            }
-        } else {
-            TLRPC.PhotoSize sizeFull = FileLoader.getClosestPhotoSizeWithSize(currentMessageObject.photoThumbs, AndroidUtilities.getPhotoSize());
-            if (sizeFull != null) {
-                file = FileLoader.getInstance(currentAccount).getPathToAttach(sizeFull, true);
-                if (!file.exists()) {
-                    file = FileLoader.getInstance(currentAccount).getPathToAttach(sizeFull, false);
-                }
-            }
-            if (file == null || !file.exists()) {
-                file = FileLoader.getInstance(currentAccount).getPathToMessage(currentMessageObject.messageOwner);
-            }
-        }
-        if (file != null && file.exists()) {
-            MediaController.saveFile(file.getAbsolutePath(), parentActivity, isVideoType ? 1 : 0, null, null, uri -> {
-                BulletinFactory.createSaveToGalleryBulletin(containerView, isVideoType, 0xf9222222, 0xffffffff).show();
-            });
-        }
-    }
         secretHint = new HintView2(activity, HintView2.DIRECTION_TOP);
         secretHint.setJoint(1, -26);
         secretHint.setPadding(dp(8), dp(8), dp(8), dp(8));
@@ -1039,6 +994,52 @@ public class SecretMediaViewer implements NotificationCenter.NotificationCenterD
         }
         textSelectionHelper.setParentView(containerView);
         textSelectionHelper.setInvalidateParent();
+    }
+
+    private void saveCurrentMediaToGallery() {
+        if (currentMessageObject == null || parentActivity == null) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 23 && (Build.VERSION.SDK_INT <= 28 || BuildVars.NO_SCOPED_STORAGE) && parentActivity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            parentActivity.requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 4);
+            return;
+        }
+        File file = null;
+        final boolean isVideoType = isVideo;
+        if (isVideoType) {
+            if (currentMessageObject.messageOwner.attachPath != null) {
+                File f = new File(currentMessageObject.messageOwner.attachPath);
+                if (f.exists()) {
+                    file = f;
+                }
+            }
+            if (file == null) {
+                TLRPC.Document document = currentMessageObject.getDocument();
+                File f = currentMessageObject.isLivePhoto() ? FileLoader.getInstance(currentAccount).getPathToAttach(document, null, true) : FileLoader.getInstance(currentAccount).getPathToMessage(currentMessageObject.messageOwner);
+                File encryptedFile = new File(f.getAbsolutePath() + ".enc");
+                if (encryptedFile.exists()) {
+                    file = encryptedFile;
+                } else if (f.exists()) {
+                    file = f;
+                }
+            }
+        } else {
+            TLRPC.PhotoSize sizeFull = FileLoader.getClosestPhotoSizeWithSize(currentMessageObject.photoThumbs, AndroidUtilities.getPhotoSize());
+            if (sizeFull != null) {
+                file = FileLoader.getInstance(currentAccount).getPathToAttach(sizeFull, true);
+                if (!file.exists()) {
+                    file = FileLoader.getInstance(currentAccount).getPathToAttach(sizeFull, false);
+                }
+            }
+            if (file == null || !file.exists()) {
+                file = FileLoader.getInstance(currentAccount).getPathToMessage(currentMessageObject.messageOwner);
+            }
+        }
+        if (file != null && file.exists()) {
+            MediaController.saveFile(file.getAbsolutePath(), parentActivity, isVideoType ? 1 : 0, null, null, uri -> {
+                BulletinFactory.createSaveToGalleryBulletin(containerView, isVideoType, 0xf9222222, 0xffffffff).show();
+            });
+        }
     }
 
     private void setCurrentCaption(MessageObject messageObject, final CharSequence _caption, boolean translating, boolean animated) {

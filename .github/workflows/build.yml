@@ -1,27 +1,47 @@
-name: Build Telegram APK
+name: Build Telegram APK (arm64, cached)
 
 on:
   push:
     branches: [ feature/user-id-profile-row, main, master ]
   workflow_dispatch:
 
+# A new push supersedes an older run instead of burning minutes in parallel.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: 27.2.12479018
+  CMAKE_VERSION: 3.22.1
+  # Keep ccache inside the workspace so the cache action picks it up from one path.
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 3G
+  CCACHE_COMPRESS: "true"
+  CCACHE_COMPRESSLEVEL: "6"
+  CCACHE_NOHASHDIR: "true"
+  # NDK + CMake rewrite mtimes and embed absolute paths; without this almost nothing hits.
+  CCACHE_SLOPPINESS: "time_macros,include_file_mtime,include_file_ctime,file_stat_matches"
+
 jobs:
   build:
     name: Build Telegram APK
     runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     steps:
       - name: Maximize Build Space
         run: |
           sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android/sdk/ndk/*
           sudo rm -rf /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
+          # the NDK is restored from cache below
+          sudo rm -rf /usr/local/lib/android/sdk/ndk/*
 
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 1
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -29,65 +49,99 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Gradle Cache
-        uses: gradle/actions/setup-gradle@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
           cache-read-only: false
+          gradle-home-cache-cleanup: true
 
-      - name: Cache NDK & CMake Prebuilts
-        uses: actions/cache@v4
+      - name: Restore Android SDK / NDK / CMake
+        uses: actions/cache/restore@v4
         id: cache-ndk
         with:
           path: |
-            /usr/local/lib/android/sdk/ndk/27.2.12479018
-            /usr/local/lib/android/sdk/cmake/3.22.1
+            /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
+            /usr/local/lib/android/sdk/cmake/${{ env.CMAKE_VERSION }}
             /usr/local/lib/android/sdk/platforms/android-36
             /usr/local/lib/android/sdk/build-tools/36.0.0
-          key: ${{ runner.os }}-android-sdk-ndk-27.2
+          key: ${{ runner.os }}-android-sdk-ndk-${{ env.NDK_VERSION }}
+
+      - name: Install Android NDK & SDK Components
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        run: |
+          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-36" "build-tools;36.0.0" \
+            "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}"
+
+      - name: Save Android SDK / NDK / CMake
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          key: ${{ runner.os }}-android-sdk-ndk-${{ env.NDK_VERSION }}
+          path: |
+            /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
+            /usr/local/lib/android/sdk/cmake/${{ env.CMAKE_VERSION }}
+            /usr/local/lib/android/sdk/platforms/android-36
+            /usr/local/lib/android/sdk/build-tools/36.0.0
 
       - name: Install Ccache
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ccache
           ccache --version
-          ccache -M 5G
-          ccache -s
+          ccache --set-config=max_size=${CCACHE_MAXSIZE}
+          ccache --set-config=compression=true
+          ccache --set-config=sloppiness=${CCACHE_SLOPPINESS}
+          ccache -z
 
-      - name: Cache Ccache & Native Build Objects
-        uses: actions/cache@v4
+      - name: Restore ccache + native build dirs
+        uses: actions/cache/restore@v4
         with:
           path: |
-            ~/.ccache
-            .cxx
+            .ccache
             TMessagesProj/.cxx
             TMessagesProj_AppStandalone/.cxx
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          # rolling key: a fresh entry per attempt, but restore-keys always seeds from
+          # the newest previous run, so the ccache keeps growing across pushes.
+          key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            ${{ runner.os }}-ccache-${{ github.ref_name }}-
             ${{ runner.os }}-ccache-
-
-      - name: Install Android NDK & SDK Components
-        if: steps.cache-ndk.outputs.cache-hit != 'true'
-        run: |
-          echo "y" | sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          sudo ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
 
       - name: Set Environment Variables
         run: |
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.2.12479018" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> $GITHUB_ENV
           echo "USE_CCACHE=1" >> $GITHUB_ENV
-          echo "CCACHE_DIR=${HOME}/.ccache" >> $GITHUB_ENV
-          echo "CCACHE_MAXSIZE=5G" >> $GITHUB_ENV
 
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace --build-cache --parallel -Dorg.gradle.caching=true
+          ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone \
+            --stacktrace --build-cache --parallel -Dorg.gradle.caching=true
+          echo "--- ccache stats ---"
           ccache -s
+
+      - name: Save ccache + native build dirs
+        if: always()
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ccache
+            TMessagesProj/.cxx
+            TMessagesProj_AppStandalone/.cxx
+          key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Telegram-Custom-APK
+          name: Telegram-Custom-APK-arm64
           path: |
             TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
             TMessagesProj/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          # the APK is already compressed
+          compression-level: 0
+          retention-days: 30

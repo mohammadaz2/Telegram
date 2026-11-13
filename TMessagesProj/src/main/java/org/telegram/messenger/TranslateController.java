@@ -1412,32 +1412,6 @@ public class TranslateController extends BaseController {
                     }
                 }
 
-                if (!UserConfig.getInstance(currentAccount).isPremium()) {
-                    final ArrayList<Integer> ids = pendingTranslation1.messageIds;
-                    final ArrayList<Utilities.Callback4<Boolean, Integer, TLRPC.TL_textWithEntities, String>> callbacks = pendingTranslation1.callbacks;
-                    final ArrayList<TLRPC.TL_textWithEntities> texts = pendingTranslation1.messageTexts;
-                    final String toLanguage = pendingTranslation1.language;
-                    for (int i = 0; i < ids.size(); ++i) {
-                        final int id = ids.get(i);
-                        final Utilities.Callback4<Boolean, Integer, TLRPC.TL_textWithEntities, String> _callback = callbacks.get(i);
-                        final String _text = texts.get(i).text;
-                        TranslateAlert2.alternativeTranslate(_text, null, toLanguage, (result, rateLimit) -> {
-                            if (result != null) {
-                                final TLRPC.TL_textWithEntities resultWithEntities = new TLRPC.TL_textWithEntities();
-                                resultWithEntities.text = result;
-                                _callback.run(isTranscription, id, resultWithEntities, toLanguage);
-                            } else {
-                                toggleTranslatingDialog(dialogId, false);
-                                NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.showBulletin, Bulletin.TYPE_ERROR, getString(rateLimit ? R.string.TranslationFailedAlert1 : R.string.TranslationFailedAlert2));
-                            }
-                            synchronized (TranslateController.this) {
-                                loadingTranslations.remove(id);
-                            }
-                        });
-                    }
-                    return;
-                }
-
                 final TLRPC.TL_messages_translateText req = new TLRPC.TL_messages_translateText();
                 req.flags |= 2;
                 for (Pair<PollText, PollText> pair : pendingTranslation1.messageTexts) {
