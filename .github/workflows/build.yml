@@ -45,6 +45,14 @@ jobs:
             /usr/local/lib/android/sdk/build-tools/36.0.0
           key: ${{ runner.os }}-android-sdk-ndk-27.2
 
+      - name: Install Ccache
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ccache
+          ccache --version
+          ccache -M 5G
+          ccache -s
+
       - name: Cache Ccache & Native Build Objects
         uses: actions/cache@v4
         with:
@@ -66,11 +74,15 @@ jobs:
       - name: Set Environment Variables
         run: |
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/27.2.12479018" >> $GITHUB_ENV
+          echo "USE_CCACHE=1" >> $GITHUB_ENV
+          echo "CCACHE_DIR=${HOME}/.ccache" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=5G" >> $GITHUB_ENV
 
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace --build-cache --parallel
+          ./gradlew :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace --build-cache --parallel -Dorg.gradle.caching=true
+          ccache -s
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
