@@ -4,6 +4,7 @@ apply plugin: 'com.android.library'
 apply plugin: 'org.telegram.build-plugin'
 apply plugin: 'idea'
 
+
 idea {
     module {
         excludeDirs += [
