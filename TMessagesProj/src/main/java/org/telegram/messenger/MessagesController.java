@@ -6671,21 +6671,47 @@ public class MessagesController extends BaseController implements NotificationCe
         });
     }
 
+    private final HashSet<Long> hiddenInGroupsUsers = new HashSet<>();
+    private boolean hiddenInGroupsUsersLoaded = false;
+
     public boolean isUserHiddenInGroups(long userId) {
         if (userId == 0) {
             return false;
         }
-        return getMainSettings().getBoolean("hide_group_msg_" + userId, false);
+        synchronized (hiddenInGroupsUsers) {
+            if (!hiddenInGroupsUsersLoaded) {
+                try {
+                    Map<String, ?> all = getMainSettings().getAll();
+                    if (all != null) {
+                        for (String key : all.keySet()) {
+                            if (key != null && key.startsWith("hide_group_msg_")) {
+                                try {
+                                    hiddenInGroupsUsers.add(Long.parseLong(key.substring(15)));
+                                } catch (Exception ignore) {
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ignore) {
+                }
+                hiddenInGroupsUsersLoaded = true;
+            }
+            return hiddenInGroupsUsers.contains(userId);
+        }
     }
 
     public void setUserHiddenInGroups(long userId, boolean hide) {
         if (userId == 0) {
             return;
         }
-        if (hide) {
-            getMainSettings().edit().putBoolean("hide_group_msg_" + userId, true).apply();
-        } else {
-            getMainSettings().edit().remove("hide_group_msg_" + userId).apply();
+        synchronized (hiddenInGroupsUsers) {
+            if (hide) {
+                hiddenInGroupsUsers.add(userId);
+                getMainSettings().edit().putBoolean("hide_group_msg_" + userId, true).apply();
+            } else {
+                hiddenInGroupsUsers.remove(userId);
+                getMainSettings().edit().remove("hide_group_msg_" + userId).apply();
+            }
         }
     }
 

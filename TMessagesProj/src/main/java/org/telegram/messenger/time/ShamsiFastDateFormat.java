@@ -38,6 +38,8 @@ public class ShamsiFastDateFormat extends FastDateFormat {
 
     private static final String MAIN_PREFS = "mainconfig";
 
+    private static volatile Boolean sShamsiEnabledCached = null;
+
     private static final ConcurrentHashMap<String, ShamsiFastDateFormat> sInstanceCache = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Part[]> sPatternCache = new ConcurrentHashMap<>();
 
@@ -94,19 +96,26 @@ public class ShamsiFastDateFormat extends FastDateFormat {
     }
 
     public static boolean isShamsiEnabled() {
+        Boolean cached = sShamsiEnabledCached;
+        if (cached != null) {
+            return cached;
+        }
         try {
             final Context context = ApplicationLoader.applicationContext;
             if (context == null) {
                 return false;
             }
             final SharedPreferences prefs = context.getSharedPreferences(MAIN_PREFS, Context.MODE_PRIVATE);
-            return prefs.getBoolean(PREF_KEY, false);
+            boolean val = prefs.getBoolean(PREF_KEY, false);
+            sShamsiEnabledCached = val;
+            return val;
         } catch (Throwable ignore) {
             return false;
         }
     }
 
     public static void setShamsiEnabled(boolean enabled) {
+        sShamsiEnabledCached = enabled;
         try {
             final Context context = ApplicationLoader.applicationContext;
             if (context == null) {

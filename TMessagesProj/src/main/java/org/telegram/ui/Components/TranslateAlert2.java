@@ -571,78 +571,88 @@ public class TranslateAlert2 extends BottomSheet implements NotificationCenter.N
             alternativeTranslateInternal(etext, fromLng, toLng, done);
         }
     }
+
+    private static final java.util.concurrent.ExecutorService translationExecutor = java.util.concurrent.Executors.newFixedThreadPool(2, new java.util.concurrent.ThreadFactory() {
+        private final java.util.concurrent.atomic.AtomicInteger count = new java.util.concurrent.atomic.AtomicInteger(1);
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread thread = new Thread(r, "AltTranslate-" + count.getAndIncrement());
+            thread.setPriority(Thread.NORM_PRIORITY - 1);
+            return thread;
+        }
+    });
+
     private static void alternativeTranslateInternal(String text, String fromLng, String toLng, Utilities.Callback2<String, Boolean> done) {
         if (done == null) return;
-        new Thread() {
-            @Override
-            public void run() {
-                String uri;
-                HttpURLConnection connection = null;
-                try {
-                    uri = "https://translate.goo";
-                    uri += "gleapis.com/transl";
-                    uri += "ate_a";
-                    uri += "/singl";
-                    uri += "e?client=gtx&sl=" + Uri.encode(fromLng) + "&tl=" + Uri.encode(toLng) + "&dt=t" + "&ie=UTF-8&oe=UTF-8&otf=1&ssel=0&tsel=0&kc=7&dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&q=";
-                    uri += text;
-                    connection = (HttpURLConnection) new URI(uri).toURL().openConnection();
-                    connection.setRequestMethod("GET");
-                    connection.setRequestProperty("User-Agent", userAgents[(int) Math.round(Math.random() * (userAgents.length - 1))]);
-                    connection.setRequestProperty("Content-Type", "application/json");
+        translationExecutor.execute(() -> {
+            String uri;
+            HttpURLConnection connection = null;
+            try {
+                uri = "https://translate.goo";
+                uri += "gleapis.com/transl";
+                uri += "ate_a";
+                uri += "/singl";
+                uri += "e?client=gtx&sl=" + Uri.encode(fromLng) + "&tl=" + Uri.encode(toLng) + "&dt=t" + "&ie=UTF-8&oe=UTF-8&otf=1&ssel=0&tsel=0&kc=7&dt=at&dt=bd&dt=ex&dt=ld&dt=md&dt=qca&dt=rw&dt=rm&dt=ss&q=";
+                uri += text;
+                connection = (HttpURLConnection) new URI(uri).toURL().openConnection();
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(10000);
+                connection.setRequestMethod("GET");
+                connection.setRequestProperty("User-Agent", userAgents[(int) Math.round(Math.random() * (userAgents.length - 1))]);
+                connection.setRequestProperty("Content-Type", "application/json");
 
-                    StringBuilder textBuilder = new StringBuilder();
-                    try (Reader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), Charsets.UTF_8))) {
-                        int c = 0;
-                        while ((c = reader.read()) != -1) {
-                            textBuilder.append((char) c);
-                        }
-                    }
-                    String jsonString = textBuilder.toString();
-
-                    JSONTokener tokener = new JSONTokener(jsonString);
-                    JSONArray array = new JSONArray(tokener);
-                    JSONArray array1 = array.getJSONArray(0);
-                    String sourceLanguage = null;
-                    try {
-                        sourceLanguage = array.getString(2);
-                    } catch (Exception e2) {}
-                    if (sourceLanguage != null && sourceLanguage.contains("-")) {
-                        sourceLanguage = sourceLanguage.substring(0, sourceLanguage.indexOf("-"));
-                    }
-                    String result = "";
-                    for (int i = 0; i < array1.length(); ++i) {
-                        String blockText = array1.getJSONArray(i).getString(0);
-                        if (blockText != null && !blockText.equals("null"))
-                            result += /*(i > 0 ? "\n" : "") +*/ blockText;
-                    }
-                    if (text.length() > 0 && text.charAt(0) == '\n')
-                        result = "\n" + result;
-                    final String finalResult = result;
-                    AndroidUtilities.runOnUIThread(() -> {
-                        if (done != null)
-                            done.run(finalResult, false);
-                    });
-                } catch (Exception e) {
-                    try {
-                        Log.e("translate", "failed to translate a text " + (connection != null ? connection.getResponseCode() : null) + " " + (connection != null ? connection.getResponseMessage() : null));
-                    } catch (IOException ioException) {
-                        ioException.printStackTrace();
-                    }
-                    e.printStackTrace();
-
-                    try {
-                        final boolean rateLimit = connection != null && connection.getResponseCode() == 429;
-                        AndroidUtilities.runOnUIThread(() -> {
-                            done.run(null, rateLimit);
-                        });
-                    } catch (Exception e2) {
-                        AndroidUtilities.runOnUIThread(() -> {
-                            done.run(null, false);
-                        });
+                StringBuilder textBuilder = new StringBuilder();
+                try (Reader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), Charsets.UTF_8))) {
+                    int c = 0;
+                    while ((c = reader.read()) != -1) {
+                        textBuilder.append((char) c);
                     }
                 }
+                String jsonString = textBuilder.toString();
+
+                JSONTokener tokener = new JSONTokener(jsonString);
+                JSONArray array = new JSONArray(tokener);
+                JSONArray array1 = array.getJSONArray(0);
+                String sourceLanguage = null;
+                try {
+                    sourceLanguage = array.getString(2);
+                } catch (Exception e2) {}
+                if (sourceLanguage != null && sourceLanguage.contains("-")) {
+                    sourceLanguage = sourceLanguage.substring(0, sourceLanguage.indexOf("-"));
+                }
+                String result = "";
+                for (int i = 0; i < array1.length(); ++i) {
+                    String blockText = array1.getJSONArray(i).getString(0);
+                    if (blockText != null && !blockText.equals("null"))
+                        result += /*(i > 0 ? "\n" : "") +*/ blockText;
+                }
+                if (text.length() > 0 && text.charAt(0) == '\n')
+                    result = "\n" + result;
+                final String finalResult = result;
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (done != null)
+                        done.run(finalResult, false);
+                });
+            } catch (Exception e) {
+                try {
+                    Log.e("translate", "failed to translate a text " + (connection != null ? connection.getResponseCode() : null) + " " + (connection != null ? connection.getResponseMessage() : null));
+                } catch (IOException ioException) {
+                    ioException.printStackTrace();
+                }
+                e.printStackTrace();
+
+                try {
+                    final boolean rateLimit = connection != null && connection.getResponseCode() == 429;
+                    AndroidUtilities.runOnUIThread(() -> {
+                        done.run(null, rateLimit);
+                    });
+                } catch (Exception e2) {
+                    AndroidUtilities.runOnUIThread(() -> {
+                        done.run(null, false);
+                    });
+                }
             }
-        }.start();
+        });
     }
 
 //    private ArrayList<Runnable> cancelTrackingDownloads = new ArrayList<>();
